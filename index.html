@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Sistema de Caixa - Rumspringa Conveniência e Tabacaria (v3.4)</title>
+<style>
+  :root{--bg:#e9ecef;--card:#fff;--accent:#2b6cb0;--muted:#6c757d;--radius:12px}
+  *{box-sizing:border-box}
+  body{font-family:Arial, Helvetica, sans-serif;background:var(--bg);margin:0;color:#222}
+  .app{display:grid;grid-template-columns:260px 1fr;gap:20px;max-width:1100px;margin:28px auto;padding:20px}
+  nav{background:var(--card);border-radius:var(--radius);padding:18px;box-shadow:0 4px 12px rgba(0,0,0,0.06);height:calc(100vh - 96px);position:sticky;top:20px;display:flex;flex-direction:column}
+  .brand{font-weight:700;color:var(--accent);font-size:15px;margin-bottom:8px}
+  .menu button{display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;border:0;background:transparent;cursor:pointer;width:100%;text-align:left}
+  .menu button.active{background:#f1f5f9}
+  .card{background:var(--card);border-radius:var(--radius);padding:16px;box-shadow:0 4px 12px rgba(0,0,0,0.04)}
+  header{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:1100px;margin:8px auto 0 auto;padding:0 20px}
+  header h1{font-size:18px;margin:0}
+  .form-row{display:flex;gap:8px;align-items:center}
+  input,select,button,textarea{padding:10px;border-radius:8px;border:1px solid #d1d5db;font-size:14px}
+  button.primary{background:var(--accent);color:white;border:0}
+  table{width:100%;border-collapse:collapse;margin-top:12px}
+  th,td{padding:10px;border-bottom:1px solid #eef2f7;text-align:left}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .small{font-size:13px;color:var(--muted)}
+  @media(max-width:900px){.app{grid-template-columns:1fr;max-width:92%}nav{height:auto;position:relative}.grid{grid-template-columns:1fr}}
+  .btn-sm{padding:6px 8px;font-size:13px;border-radius:6px}
+  .btn-danger{background:#ef4444;color:white;border:0}
+  .btn-edit{background:#f59e0b;color:white;border:0}
+  .modal-back{position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;z-index:9999;display:none}
+  .modal{background:#fff;padding:16px;border-radius:10px;max-width:480px;width:100%}
+  #errorOverlay{position:fixed;right:12px;bottom:12px;background:#fff3f3;border:1px solid #f5c2c7;padding:10px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.08);max-width:360px;display:none;z-index:10000}
+  #errorOverlay pre{white-space:pre-wrap;margin:0;color:#7a1f1f;font-size:12px}
+  .muted{color:var(--muted);font-size:13px}
+  #graficoRelatorio{max-height:260px;height:220px}
+  .info-line{font-size:13px;color:#333;margin-top:6px}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Sistema de Caixa - Rumspringa Conveniência e Tabacaria</h1>
+    <div class="small">Dados salvos localmente no navegador (localStorage) • Versão 3.4</div>
+  </header>
+
+  <div class="app">
+    <nav class="card">
+      <div class="brand">Rumspringa • Conveniência</div>
+      <div class="menu">
+        <button id="menu-dashboard" class="active" data-show="dashboard">📊 Dashboard</button>
+        <button id="menu-registrar" data-show="registrar">➕ Registrar Venda / Retirada</button>
+        <button id="menu-relatorios" data-show="relatorios">📁 Relatórios</button>
+        <button id="menu-fechamento" data-show="fechamento">🔒 Fechamento Diário</button>
+        <button id="menu-export" data-show="export">📤 Exportar / Imprimir</button>
+      </div>
+      <div style="margin-top:auto;font-size:13px;color:var(--muted)">Versão 3.4 Estável por Mr.Canatto · Sem Nuvem · Use com Chrome/Edge/Firefox</div>
+    </nav>
+
+    <main>
+      <section id="dashboard" class="card" style="display:block">
+        <h3>Dashboard</h3>
+        <div class="grid" style="margin-top:12px">
+          <div class="card">
+            <div class="small">Total (todas as vendas, retiradas negativas incluídas)</div>
+            <div style="font-size:20px;font-weight:700">R$ <span id="totalDia">0.00</span></div>
+            <div class="small">Transações: <span id="contVendas">0</span></div>
+          </div>
+          <div class="card">
+            <div class="small">Por forma de pagamento</div>
+            <div>Dinheiro: R$ <span id="totalDinheiro">0.00</span></div>
+            <div>Cartão Crédito: R$ <span id="totalCartCred">0.00</span></div>
+            <div>Cartão Débito: R$ <span id="totalCartDeb">0.00</span></div>
+            <div>Pix: R$ <span id="totalPix">0.00</span></div>
+            <div class="small" style="margin-top:6px">Troco ativo para hoje: R$ <span id="trocoAtivo">0.00</span></div>
+            <div class="small">Saldo digital inicial (hoje): R$ <span id="digitalAtivo">0.00</span></div>
+            <div class="small" style="margin-top:8px;color:#7a1f1f">Retiradas Físicas: R$ <span id="retFis">0.00</span></div>
+            <div class="small" style="color:#7a1f1f">Retiradas Digitais: R$ <span id="retDig">0.00</span></div>
+          </div>
+          <div class="card">
+            <div class="small">Ações rápidas</div>
+            <div style="margin-top:8px"><button class="primary" id="btnNewSale">Registrar nova venda</button></div>
+            <div style="margin-top:8px"><button id="btnExportCSV">Exportar CSV</button> <button id="btnExportXLSX">Exportar XLSX</button> <button id="btnPrintScreen">Imprimir tela</button></div>
+          </div>
+        </div>
+
+        <div style="margin-top:16px">
+          <h4>Últimas transações</h4>
+          <table>
+            <thead>
+              <tr><th>Horário</th><th>Descrição</th><th>Valor</th><th>Pagamento</th><th>Ações</th></tr>
+            </thead>
+            <tbody id="listaVendas"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="registrar" class="card" style="display:none">
+        <h3>Registrar Venda / Retirada</h3>
+        <div style="margin-top:12px" class="form-row">
+          <select id="transacaoType" style="width:150px">
+            <option value="venda">Venda</option>
+            <option value="retirada">Retirada</option>
+          </select>
+          <input type="text" id="produtos" placeholder="Descrição (ex: Energético)" style="flex:2" maxlength="200" />
+          <input type="number" id="valor" placeholder="Valor (ex: 5.50)" step="0.01" style="width:120px" min="0.00" max="100000" />
+          <select id="pagamentoMain">
+            <option>Dinheiro</option>
+            <option>Cartão</option>
+            <option>Pix</option>
+            <option>Retirada</option>
+          </select>
+          <select id="cardType" style="display:none; width:120px">
+            <option>Crédito</option>
+            <option>Débito</option>
+          </select>
+        </div>
+
+        <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+          <div id="dinheiroInputs" style="display:none;align-items:center;gap:8px;">
+            <input type="number" id="recebido" placeholder="Recebido R$" step="0.01" style="width:140px" />
+            <input type="text" id="trocoCalc" placeholder="Troco" readonly style="width:120px;background:#f8fafc" />
+          </div>
+
+          <div id="cardInfo" style="display:none;align-items:center;gap:8px;font-size:13px;color:var(--muted)"></div>
+
+          <div style="margin-left:auto;display:flex;gap:8px;align-items:center"> 
+            <div id="retiradaFields" style="display:none;gap:8px;align-items:center">
+              <select id="origemRetirada">
+                <option value="">Origem da retirada</option>
+                <option value="fisico">Dinheiro Físico (Caixa)</option>
+                <option value="digital">Digital (Conta do Cartão / Pix)</option>
+              </select>
+              <select id="tipoCaixa">
+                <option value="">Tipo de caixa</option>
+                <option value="caixa_fisico">Caixa Físico</option>
+                <option value="caixa_digital">Caixa Digital</option>
+              </select>
+            </div>
+            <button class="primary" id="btnAddSale">Adicionar</button>
+          </div>
+        </div>
+
+        <div style="margin-top:18px">
+          <label class="small">Definir troco/caixa inicial do dia (opcional) — será salvo para HOJE:</label>
+          <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+            <input type="number" id="trocoInicial" placeholder="Troco inicial R$" step="0.01" style="width:160px" />
+            <button id="btnDefinirTroco">Definir (hoje)</button>
+            <div style="align-self:center;color:var(--muted);font-size:13px">Valor atual: R$ <span id="trocoAtivo2">0.00</span></div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px">
+          <label class="small">Definir saldo em conta digital no início do dia (opcional) — será salvo para HOJE:</label>
+          <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+            <input type="number" id="digitalInicial" placeholder="Saldo digital inicial R$" step="0.01" style="width:200px" />
+            <button id="btnDefinirDigital">Definir (hoje)</button>
+            <div style="align-self:center;color:var(--muted);font-size:13px">Valor atual: R$ <span id="digitalAtivo2">0.00</span></div>
+          </div>
+        </div>
+
+      </section>
+
+      <section id="relatorios" class="card" style="display:none">
+        <h3>Relatórios</h3>
+        <div class="small">Selecionar período</div>
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+          <input type="date" id="fromDate" />
+          <input type="date" id="toDate" />
+          <button id="btnGerarRelatorio">Gerar</button>
+          <button id="btnPrintRelatorio" style="margin-left:8px">🖨️ Imprimir</button>
+        </div>
+        <canvas id="graficoRelatorio" style="width:100%;height:220px;margin-top:12px"></canvas>
+        <div id="relatorioResultado" style="margin-top:12px"></div>
+      </section>
+
+      <section id="fechamento" class="card" style="display:none">
+        <h3>Fechamento Diário</h3>
+        <div class="small">Escolha a data e confira o total antes de fechar (impressão A4 disponível)</div>
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+          <input type="date" id="dataFechamento" />
+          <button id="btnVisualizarFechamento">Visualizar</button>
+          <button id="btnFecharDia">Fechar Dia</button>
+          <button id="btnImprimirFechamento">Imprimir Fechamento (A4)</button>
+        </div>
+        <div id="visuFechamento" style="margin-top:12px"></div>
+        <div style="margin-top:12px">
+          <h4>Fechamentos registrados</h4>
+          <table id="tabelaFechamentos"><thead><tr><th>Data</th><th>Total</th><th>Troco Inicial</th><th>Saldo Digital Inicial</th><th>Transações</th><th>Ações</th></tr></thead><tbody></tbody></table>
+        </div>
+      </section>
+
+      <section id="export" class="card" style="display:none">
+        <h3>Exportar / Backup</h3>
+        <div style="margin-top:12px">
+          <button id="btnExportCSV2" class="btn-sm">Exportar CSV</button>
+          <button id="btnExportXLSX2" class="btn-sm">Exportar XLSX</button>
+          <button id="btnDownloadBackup" class="btn-sm">Baixar backup (JSON)</button>
+          <label class="btn-sm" style="display:inline-block;margin-left:8px">Importar backup:
+            <input type="file" id="inputBackup" style="display:inline-block" accept="application/json" />
+          </label>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <div id="modalEdit" class="modal-back">
+    <div class="modal">
+      <h3>Editar Transação</h3>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+        <input id="edit_produtos" placeholder="Descrição" />
+        <input id="edit_valor" type="number" step="0.01" placeholder="Valor" />
+        <select id="edit_pagamento"><option>Dinheiro</option><option>Crédito</option><option>Débito</option><option>Pix</option><option>Retirada</option></select>
+        <div id="edit_ret_fields" style="display:none;gap:8px">
+          <select id="edit_origem"><option value="">Origem da retirada</option><option value="fisico">Dinheiro Físico (Caixa)</option><option value="digital">Digital (Conta do Cartão / Pix)</option></select>
+          <select id="edit_tipoCaixa"><option value="">Tipo de caixa</option><option value="caixa_fisico">Caixa Físico</option><option value="caixa_digital">Caixa Digital</option></select>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button id="btnCancelEdit">Cancelar</button>
+          <button id="btnSaveEdit" class="primary">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="errorOverlay"><strong>Erro detectado</strong><pre id="errorText"></pre></div>
+
+  <script>
+  (function(){
+    function showError(msg){ try{ const el=document.getElementById('errorOverlay'); document.getElementById('errorText').innerText = String(msg); el.style.display='block'; console.error(msg); }catch(e){ console.error('Erro ao exibir overlay', e); } }
+    window.addEventListener('error', function(e){ showError(e.message + '\n' + (e.filename||'') + ':' + (e.lineno||'')); });
+    window.addEventListener('unhandledrejection', function(e){ showError('Promise rejection: ' + (e.reason && (e.reason.message||JSON.stringify(e.reason)) || e.reason)); });
+
+    function pad(n){ return n<10? '0'+n : ''+n; }
+    function formatDateInputToDMY(inputDate){ if(!inputDate) return ''; const parts = inputDate.split('-'); if(parts.length!==3) return inputDate; return parts[2]+'-'+parts[1]+'-'+parts[0]; }
+    function formatTimeFromISO(isodate){ const d = new Date(isodate); return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds()); }
+    function formatDateTimeToDMY(isodate){ if(!isodate) return ''; const d = new Date(isodate); return pad(d.getDate())+'-'+pad(d.getMonth()+1)+'-'+d.getFullYear()+' '+pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds()); }
+
+    function trocoKeyForDate(dateStr){ return 'trocoInicial_' + dateStr; }
+    function digitalKeyForDate(dateStr){ return 'digitalInicial_' + dateStr; }
+    function setTrocoForDate(dateStr, value){ localStorage.setItem(trocoKeyForDate(dateStr), Number(value||0).toFixed(2)); }
+    function getTrocoForDate(dateStr){ return parseFloat(localStorage.getItem(trocoKeyForDate(dateStr))||0); }
+    function setDigitalForDate(dateStr, value){ localStorage.setItem(digitalKeyForDate(dateStr), Number(value||0).toFixed(2)); }
+    function getDigitalForDate(dateStr){ return parseFloat(localStorage.getItem(digitalKeyForDate(dateStr))||0); }
+
+    document.addEventListener('DOMContentLoaded', function(){
+      try{
+        const storage = {
+          carregarVendas: ()=> JSON.parse(localStorage.getItem('vendasCaixa')||'[]'),
+          salvarVendas: (v)=> localStorage.setItem('vendasCaixa', JSON.stringify(v)),
+          carregarFechamentos: ()=> JSON.parse(localStorage.getItem('fechamentosCaixa')||'[]'),
+          salvarFechamentos: (f)=> localStorage.setItem('fechamentosCaixa', JSON.stringify(f))
+        };
+
+        // menu
+        document.querySelectorAll('.menu button[data-show]').forEach(b=>b.addEventListener('click', ()=> show(b.dataset.show)));
+        const btnNewSale = document.getElementById('btnNewSale'); if(btnNewSale) btnNewSale.addEventListener('click', ()=> show('registrar'));
+
+        // elements
+        const pagamentoMain = document.getElementById('pagamentoMain'); if(pagamentoMain) pagamentoMain.addEventListener('change', onPagamentoChange);
+        const cardType = document.getElementById('cardType'); if(cardType) cardType.addEventListener('change', onPagamentoChange);
+        const transacaoType = document.getElementById('transacaoType'); if(transacaoType) transacaoType.addEventListener('change', onTransacaoTypeChange);
+        const valorEl = document.getElementById('valor'); if(valorEl) valorEl.addEventListener('input', onInputChange);
+        const recebidoEl = document.getElementById('recebido'); if(recebidoEl) recebidoEl.addEventListener('input', onInputChange);
+
+        document.getElementById('btnAddSale').addEventListener('click', adicionarVendaConfirm);
+
+        document.getElementById('btnDefinirTroco').addEventListener('click', function(){ const v=parseFloat(document.getElementById('trocoInicial').value)||0; const today = new Date(); const ds = today.getFullYear()+'-'+pad(today.getMonth()+1)+'-'+pad(today.getDate()); setTrocoForDate(ds, v); document.getElementById('trocoAtivo').innerText = getTrocoForDate(ds).toFixed(2); document.getElementById('trocoAtivo2').innerText = getTrocoForDate(ds).toFixed(2); alert('Troco definido para hoje ('+formatDateInputToDMY(ds)+')'); });
+        document.getElementById('btnDefinirDigital').addEventListener('click', function(){ const v=parseFloat(document.getElementById('digitalInicial').value)||0; const today = new Date(); const ds = today.getFullYear()+'-'+pad(today.getMonth()+1)+'-'+pad(today.getDate()); setDigitalForDate(ds, v); document.getElementById('digitalAtivo').innerText = getDigitalForDate(ds).toFixed(2); document.getElementById('digitalAtivo2').innerText = getDigitalForDate(ds).toFixed(2); alert('Saldo digital definido para hoje ('+formatDateInputToDMY(ds)+')'); });
+
+        // exports
+        document.getElementById('btnExportCSV').addEventListener('click', exportCSV);
+        document.getElementById('btnExportCSV2').addEventListener('click', exportCSV);
+        document.getElementById('btnExportXLSX').addEventListener('click', exportXLSX);
+        document.getElementById('btnExportXLSX2').addEventListener('click', exportXLSX);
+        document.getElementById('btnPrintScreen').addEventListener('click', ()=> window.print());
+
+        document.getElementById('btnGerarRelatorio').addEventListener('click', gerarRelatorio);
+        const btnPrintRel = document.getElementById('btnPrintRelatorio'); if(btnPrintRel) btnPrintRel.addEventListener('click', function(){
+          const from = document.getElementById('fromDate').value; const to = document.getElementById('toDate').value;
+          const vendas = storage.carregarVendas(); const fromT = from? new Date(from+'T00:00:00'): new Date('1970-01-01'); const toT = to? new Date(to+'T23:59:59'): new Date();
+          const filtradas = vendas.filter(v=>{ const d=new Date(v.hora); return d>=fromT && d<=toT; }); let total=0; let counts={}; filtradas.forEach(v=>{ total+=v.valor; counts[v.pagamento] = (counts[v.pagamento]||0)+v.valor; });
+          const paymentKeys = ['Dinheiro','Pix','Crédito','Débito','Retirada']; paymentKeys.forEach(k=>{ if(!counts[k]) counts[k]=0; });
+          const sorted = Object.keys(counts).map(k=>({k:k,v:counts[k]})).sort((a,b)=>b.v-a.v);
+          const digitalSum = (counts['Pix']||0) + (counts['Crédito']||0) + (counts['Débito']||0);
+          const lucro25 = total*0.25;
+          let html = '<!doctype html><html><head><meta charset="utf-8"><title>Relatório</title><style>body{font-family:Arial,Helvetica,sans-serif;padding:20px} table{width:100%;border-collapse:collapse;margin-top:10px} th,td{border:1px solid #333;padding:8px;text-align:left} .right{text-align:right}</style></head><body>';
+          html += '<h2>Relatório de vendas</h2>';
+          html += '<div>Período: '+(from?formatDateInputToDMY(from):'início')+' → '+(to?formatDateInputToDMY(to):'agora')+'</div>';
+          html += '<div style="margin-top:8px"><strong>Total: R$ '+total.toFixed(2)+'</strong></div>';
+          html += '<div style="margin-top:6px"><strong>Somativa digital (Pix + Cartões): R$ '+digitalSum.toFixed(2)+'</strong></div>';
+          html += '<h3 style="margin-top:12px">Totais por forma (maior→menor)</h3><ul>';
+          sorted.forEach(item=>{ html += '<li>'+item.k+': R$ '+item.v.toFixed(2)+'</li>'; });
+          html += '</ul>';
+          html += '<div style="margin-top:8px;font-weight:700">Lucro estimado (25%): R$ '+lucro25.toFixed(2)+'</div>';
+          html += '<table><thead><tr><th>Hora</th><th>Produtos</th><th class="right">Valor</th><th>Pagamento</th><th>Origem</th><th>TipoCaixa</th></tr></thead><tbody>';
+          filtradas.forEach(function(v){ html += '<tr><td>'+formatDateTimeToDMY(v.hora)+'</td><td>'+escapeHtml(v.produtos)+'</td><td class="right">R$ '+v.valor.toFixed(2)+'</td><td>'+escapeHtml(v.pagamento)+'</td><td>'+escapeHtml(v.origem||'')+'</td><td>'+escapeHtml(v.tipoCaixa||'')+'</td></tr>'; });
+          html += '</tbody></table></body></html>';
+          const w = window.open('','_blank'); if(!w){ alert('Bloqueador de popups impediu a abertura da janela. Permita popups para imprimir.'); return; } w.document.write(html); w.document.close(); w.focus(); setTimeout(()=>w.print(),300);
+        });
+
+        document.getElementById('btnVisualizarFechamento').addEventListener('click', visualizarFechamento);
+        document.getElementById('btnFecharDia').addEventListener('click', fecharDia);
+        document.getElementById('btnImprimirFechamento').addEventListener('click', imprimirFechamento);
+
+        document.getElementById('btnDownloadBackup').addEventListener('click', downloadBackup);
+        document.getElementById('inputBackup').addEventListener('change', importBackup);
+
+        const modal = document.getElementById('modalEdit'); let editingId = null;
+        document.getElementById('btnCancelEdit').addEventListener('click', ()=> { modal.style.display='none'; editingId=null; });
+        document.getElementById('btnSaveEdit').addEventListener('click', ()=> { const vendas = storage.carregarVendas(); const idx = vendas.findIndex(x=>x.id===editingId); if(idx<0){ alert('Registro não encontrado'); modal.style.display='none'; return; } const p = document.getElementById('edit_produtos').value.trim(); const v = parseFloat(document.getElementById('edit_valor').value); const pay = document.getElementById('edit_pagamento').value; const origem = document.getElementById('edit_origem').value; const tipoCaixa = document.getElementById('edit_tipoCaixa').value; if(!p || isNaN(v)){ alert('Preencha corretamente'); return; } if(pay==='Retirada'){ if(!origem || !tipoCaixa){ alert('Escolha origem e tipo de caixa para retirada'); return; } vendas[idx].origem = origem; vendas[idx].tipoCaixa = tipoCaixa; } else { delete vendas[idx].origem; delete vendas[idx].tipoCaixa; } vendas[idx].produtos = p; vendas[idx].valor = Number(v.toFixed(2)) * (vendas[idx].valor<0 ? -1 : 1); // keep sign logic
+          // if original was negative, keep sign; for simplicity, store positive for vendas and negative for retiradas
+          if(pay==='Retirada'){ vendas[idx].valor = -Math.abs(Number(v.toFixed(2))); } else { vendas[idx].valor = Number(v.toFixed(2)); }
+          vendas[idx].pagamento = pay; storage.salvarVendas(vendas); modal.style.display='none'; editingId=null; atualizarTudo(); });
+
+        function uid(){ try{ return crypto.getRandomValues(new Uint32Array(2)).join('') + Date.now().toString(36); }catch(e){ return Math.random().toString(36).slice(2)+Date.now().toString(36); } }
+        function escapeHtml(text){ if(!text) return ''; return String(text).replace(/[&<>\"']/g, function(s){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[s]); }); }
+
+        function show(id){ ['dashboard','registrar','relatorios','fechamento','export'].forEach(s=> document.getElementById(s).style.display = (s===id? 'block':'none')); document.querySelectorAll('.menu button').forEach(b=>b.classList.remove('active')); const btn = document.querySelector('.menu button[data-show="'+id+'"]'); if(btn) btn.classList.add('active'); atualizarTudo(); }
+
+        // ---------- Transação / Registro ----------
+        function onTransacaoTypeChange(){ const t = document.getElementById('transacaoType').value; const pagamentoMain = document.getElementById('pagamentoMain'); const retiradaFields = document.getElementById('retiradaFields'); if(t==='retirada'){ pagamentoMain.value = 'Retirada'; pagamentoMain.disabled = true; document.getElementById('dinheiroInputs').style.display = 'none'; document.getElementById('cardType').style.display='none'; document.getElementById('cardInfo').style.display='none'; retiradaFields.style.display='inline-flex'; } else { pagamentoMain.disabled = false; onPagamentoChange(); retiradaFields.style.display='none'; document.getElementById('origemRetirada').value=''; document.getElementById('tipoCaixa').value=''; } }
+
+        function onPagamentoChange(){ const val = document.getElementById('pagamentoMain').value; const cardType = document.getElementById('cardType'); const dinheiroInputs = document.getElementById('dinheiroInputs'); const cardInfo = document.getElementById('cardInfo'); const retiradaFields = document.getElementById('retiradaFields'); if(val==='Cartão'){ cardType.style.display = 'inline-block'; dinheiroInputs.style.display='none'; cardInfo.style.display='inline-block'; updateCardInfo(); retiradaFields.style.display='none'; } else { cardType.style.display = 'none'; cardInfo.style.display='none'; if(val==='Dinheiro'){ dinheiroInputs.style.display='inline-flex'; } else { dinheiroInputs.style.display='none'; } if(val==='Retirada'){ retiradaFields.style.display='inline-flex'; } else { retiradaFields.style.display='none'; } }
+        }
+
+        function onInputChange(){ // update troco and card price preview
+          const pagamento = document.getElementById('pagamentoMain').value;
+          const valor = parseFloat(document.getElementById('valor').value) || 0;
+          if(pagamento==='Dinheiro'){
+            const recebido = parseFloat(document.getElementById('recebido').value) || 0;
+            const troco = Math.max(0, (recebido - valor));
+            document.getElementById('trocoCalc').value = 'R$ ' + troco.toFixed(2);
+          }
+          if(pagamento==='Cartão') updateCardInfo();
+        }
+
+        function updateCardInfo(){ const valor = parseFloat(document.getElementById('valor').value) || 0; const tipo = document.getElementById('cardType').value; let fee = 0; if(tipo==='Débito') fee = 0.03; else if(tipo==='Crédito') fee = 0.05; const total = valor * (1 + fee); document.getElementById('cardInfo').innerText = 'Taxa ' + (fee*100).toFixed(0) + '% → Total cobrado: R$ ' + total.toFixed(2); }
+
+        function adicionarVendaConfirm(){ const produtos = document.getElementById('produtos').value.trim(); const valor = parseFloat(document.getElementById('valor').value); const tipoTrans = document.getElementById('transacaoType').value; const pagamentoMain = document.getElementById('pagamentoMain').value; const pagamento = (pagamentoMain==='Cartão' ? document.getElementById('cardType').value : pagamentoMain);
+          if(!produtos){ alert('Preencha a descrição.'); return; }
+          if(isNaN(valor) || valor<=0){ alert('Preencha um valor válido (>0).'); return; }
+
+          // compute fee only for display (do NOT add to final saved value)
+          let fee = 0; if(pagamento==='Débito') fee = 0.03; if(pagamento==='Crédito') fee = 0.05;
+          let valorComTaxa = Number((valor * (1+fee)).toFixed(2));
+          let troco = 0;
+          if(pagamento==='Dinheiro'){
+            const recebido = parseFloat(document.getElementById('recebido').value) || 0;
+            if(recebido < valor){ if(!confirm('Recebido é menor que o valor. Deseja continuar registrando mesmo assim? (irá aceitar valor parcial)')){} }
+            troco = Number(Math.max(0, recebido - valor).toFixed(2));
+          }
+
+          // if retirada, make it negative value and payment 'Retirada'
+          let resumo = '';
+          if(tipoTrans==='retirada' || pagamento==='Retirada'){
+            const origem = document.getElementById('origemRetirada').value;
+            const tipoCaixa = document.getElementById('tipoCaixa').value;
+            if(!origem || !tipoCaixa){ alert('Escolha Origem da retirada e Tipo de Caixa (são obrigatórios).'); return; }
+            resumo = 'Tipo: RETIRADA\nDescrição: ' + produtos + '\nValor retirado: R$ ' + Number(valor).toFixed(2) + '\nOrigem: ' + (origem==='fisico'? 'Dinheiro Físico (Caixa)':'Digital (Cartão/Pix)') + '\nTipo de Caixa: ' + (tipoCaixa==='caixa_fisico'? 'Caixa Físico':'Caixa Digital') + '\n\nConfirma registrar retirada (valor será negativo no caixa)?';
+            if(confirm(resumo)){
+              adicionarVendaFinal({ produtos, valor: -Number(valor.toFixed(2)), pagamento: 'Retirada', origem: origem, tipoCaixa: tipoCaixa });
+            }
+            return;
+          }
+
+          // apresentação antes de confirmar
+          resumo = 'Resumo da transação:\n';
+          resumo += 'Descrição: ' + produtos + '\n';
+          resumo += 'Pagamento: ' + pagamento + '\n';
+          resumo += 'Valor base: R$ ' + Number(valor).toFixed(2) + '\n';
+          if(fee>0) resumo += 'Taxa aplicada (para cobrança ao cliente): ' + (fee*100).toFixed(0) + '% → Total cobrado: R$ ' + valorComTaxa.toFixed(2) + '\n(Valor registrado no caixa: R$ ' + valor.toFixed(2) + ')\n';
+          if(pagamento==='Dinheiro') resumo += 'Recebido: R$ ' + (parseFloat(document.getElementById('recebido').value)||0).toFixed(2) + ' · Troco: R$ ' + troco.toFixed(2) + '\n';
+          resumo += '\nConfirmar e registrar?';
+
+          if(confirm(resumo)){
+            // Save only the base value (without fee). Fee is shown only for customer repasse.
+            adicionarVendaFinal({ produtos, valor: Number(valor.toFixed(2)), pagamento: pagamento });
+          }
+        }
+
+        function adicionarVendaFinal(item){ const now = new Date(); const venda = { id: uid(), produtos: item.produtos, valor: Number(item.valor.toFixed(2)), pagamento: item.pagamento, hora: now.toISOString() };
+          if(item.origem) venda.origem = item.origem;
+          if(item.tipoCaixa) venda.tipoCaixa = item.tipoCaixa;
+          const vendas = storage.carregarVendas(); vendas.push(venda); storage.salvarVendas(vendas); document.getElementById('produtos').value=''; document.getElementById('valor').value=''; document.getElementById('recebido').value=''; document.getElementById('trocoCalc').value=''; document.getElementById('origemRetirada').value=''; document.getElementById('tipoCaixa').value=''; alert('Transação registrada!'); show('dashboard'); }
+
+        // ---------- Tabela / Listagem ----------
+        function atualizarTabela(){ const tbody = document.getElementById('listaVendas'); if(!tbody) return; tbody.innerHTML=''; const vendas = storage.carregarVendas().slice().reverse(); vendas.slice(0,500).forEach(v=>{ const tr = document.createElement('tr'); const dateStr = formatDateTimeToDMY(v.hora); const displayVal = (v.valor<0? '- R$ ' + Math.abs(v.valor).toFixed(2) : 'R$ '+v.valor.toFixed(2)); const pagamentoLabel = escapeHtml(v.pagamento) + (v.pagamento==='Retirada' ? ' (' + (v.origem==='fisico' ? 'Físico' : (v.origem==='digital' ? 'Digital' : '')) + ')' : ''); tr.innerHTML = '<td>'+dateStr+'</td><td>'+escapeHtml(v.produtos)+'</td><td>'+displayVal+'</td><td>'+pagamentoLabel+'</td><td></td>'; const tdActions = tr.querySelector('td:last-child'); const btnEdit = document.createElement('button'); btnEdit.className='btn-sm btn-edit'; btnEdit.textContent='Editar'; btnEdit.addEventListener('click', ()=> openEditModal(v.id)); const btnDel = document.createElement('button'); btnDel.className='btn-sm btn-danger'; btnDel.style.marginLeft='6px'; btnDel.textContent='Apagar'; btnDel.addEventListener('click', ()=> apagarVenda(v.id)); tdActions.appendChild(btnEdit); tdActions.appendChild(btnDel); tbody.appendChild(tr); }); }
+
+        function openEditModal(id){ const vendas = storage.carregarVendas(); const v = vendas.find(x=>x.id===id); if(!v) { alert('Transação não encontrada'); return; } editingId = id; document.getElementById('edit_produtos').value = v.produtos; document.getElementById('edit_valor').value = Math.abs(v.valor).toFixed(2); document.getElementById('edit_pagamento').value = v.pagamento; document.getElementById('edit_origem').value = v.origem||''; document.getElementById('edit_tipoCaixa').value = v.tipoCaixa||''; document.getElementById('modalEdit').style.display='flex'; const editPay = document.getElementById('edit_pagamento'); editPay.addEventListener('change', function(){ document.getElementById('edit_ret_fields').style.display = (this.value==='Retirada' ? 'block':'none'); }); document.getElementById('edit_ret_fields').style.display = (v.pagamento==='Retirada' ? 'block':'none'); }
+
+        function apagarVenda(id){ if(!confirm('Apagar essa transação?')) return; let vendas = storage.carregarVendas(); vendas = vendas.filter(v=>v.id!==id); storage.salvarVendas(vendas); atualizarTudo(); alert('Transação apagada'); }
+
+        // ---------- Dashboard ----------
+        function atualizarDashboard(){ const vendas = storage.carregarVendas(); let total=0, c=0, din=0, cred=0, deb=0, pix=0, retiradaFis=0, retiradaDig=0; vendas.forEach(v=>{ total += v.valor; c++; if(v.pagamento==='Dinheiro') din+=v.valor; else if(v.pagamento==='Crédito') cred+=v.valor; else if(v.pagamento==='Débito') deb+=v.valor; else if(v.pagamento==='Pix') pix+=v.valor; else if(v.pagamento==='Retirada'){ if(v.origem==='fisico') retiradaFis += v.valor; else retiradaDig += v.valor; } });
+          document.getElementById('totalDia').innerText = total.toFixed(2); document.getElementById('contVendas').innerText = c; document.getElementById('totalDinheiro').innerText = (din+retiradaFis).toFixed(2); document.getElementById('totalCartCred').innerText = cred.toFixed(2); document.getElementById('totalCartDeb').innerText = deb.toFixed(2); document.getElementById('totalPix').innerText = pix.toFixed(2);
+          const today = new Date(); const ds = today.getFullYear()+'-'+pad(today.getMonth()+1)+'-'+pad(today.getDate()); const trocoVal = getTrocoForDate(ds); const trocoEl = document.getElementById('trocoAtivo'); if(trocoEl) trocoEl.innerText = trocoVal.toFixed(2); const trocoEl2 = document.getElementById('trocoAtivo2'); if(trocoEl2) trocoEl2.innerText = trocoVal.toFixed(2);
+          const digitalVal = getDigitalForDate(ds); const digitalEl = document.getElementById('digitalAtivo'); if(digitalEl) digitalEl.innerText = digitalVal.toFixed(2); const digitalEl2 = document.getElementById('digitalAtivo2'); if(digitalEl2) digitalEl2.innerText = digitalVal.toFixed(2);
+          document.getElementById('retFis').innerText = retiradaFis.toFixed(2); document.getElementById('retDig').innerText = retiradaDig.toFixed(2);
+        }
+
+        function createCSV(rows){ return rows.map(r=>r.map(cell => { if(cell === null || cell === undefined) return ''; const s = String(cell); if(s.indexOf(',')>=0 || s.indexOf('"')>=0 || s.indexOf('\n')>=0) return '"' + s.replace(/"/g,'""') + '"'; return s; }).join(',')).join('\n'); }
+
+        function exportCSV(){ const vendas = storage.carregarVendas(); if(!vendas.length){ alert('Sem transações para exportar'); return; } const header = ['hora','produtos','valor','pagamento','origem','tipoCaixa']; const rows = vendas.map(v=> [v.hora, v.produtos, v.valor.toFixed(2), v.pagamento, v.origem||'', v.tipoCaixa||'']); const csv = createCSV([header, ...rows]); const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download='vendas_caixa.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
+
+        function exportXLSX(){ const vendas = storage.carregarVendas(); if(!vendas.length){ alert('Sem transações para exportar'); return; } if(window.XLSX && typeof window.XLSX.utils !== 'undefined'){ const ws_data = [['hora','produtos','valor','pagamento','origem','tipoCaixa']]; vendas.forEach(v=> ws_data.push([v.hora, v.produtos, v.valor, v.pagamento, v.origem||'', v.tipoCaixa||''])); const ws = window.XLSX.utils.aoa_to_sheet(ws_data); const wb = window.XLSX.utils.book_new(); window.XLSX.utils.book_append_sheet(wb, ws, 'Vendas'); window.XLSX.writeFile(wb, 'vendas_caixa.xlsx'); return; } const header = ['hora','produtos','valor','pagamento','origem','tipoCaixa']; const rows = vendas.map(v=> [v.hora, v.produtos, v.valor.toFixed(2), v.pagamento, v.origem||'', v.tipoCaixa||'']); const csv = createCSV([header, ...rows]); const blob = new Blob([csv], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=utf-8;'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download='vendas_caixa.xlsx'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
+
+        // ---------- Relatórios ----------
+        function gerarRelatorio(){ const from = document.getElementById('fromDate').value; const to = document.getElementById('toDate').value; const vendas = storage.carregarVendas(); const fromT = from? new Date(from+'T00:00:00'): new Date('1970-01-01'); const toT = to? new Date(to+'T23:59:59'): new Date(); const filtradas = vendas.filter(v=>{ const d=new Date(v.hora); return d>=fromT && d<=toT; }); let total=0; let counts={}; filtradas.forEach(v=>{ total+=v.valor; counts[v.pagamento] = (counts[v.pagamento]||0)+v.valor; }); const paymentKeys = ['Dinheiro','Pix','Crédito','Débito','Retirada']; paymentKeys.forEach(k=>{ if(!counts[k]) counts[k]=0; }); const sorted = Object.keys(counts).map(k=>({k:k,v:counts[k]})).sort((a,b)=>b.v-a.v); const el = document.getElementById('relatorioResultado'); let detal = '<div class="card"><div>Total de transações no período: R$ '+total.toFixed(2)+'</div><div class="small" style="margin-top:6px">Detalhe por forma (maior → menor):</div>'; detal += '<ul style="margin:6px 0 0 16px;padding:0">'; sorted.forEach(item=>{ detal += '<li>'+item.k+': R$ '+item.v.toFixed(2)+'</li>'; }); detal += '</ul>'; const lucro25 = total*0.25; const digitalSum = (counts['Pix']||0) + (counts['Crédito']||0) + (counts['Débito']||0); detal += '<div style="margin-top:8px;font-weight:700">Somativa digital (Pix + Cartões): R$ '+digitalSum.toFixed(2)+'</div>'; detal += '<div style="margin-top:8px;font-weight:700">Lucro estimado (25%): R$ '+lucro25.toFixed(2)+'</div></div>'; detal += '<div style="margin-top:8px"><button id="btnExportRelCSV">Exportar relatório (CSV)</button></div>'; el.innerHTML = detal; const btnRel = document.getElementById('btnExportRelCSV'); if(btnRel) btnRel.addEventListener('click', ()=> exportRelatorioCSV(from, to)); try{ const canvas = document.getElementById('graficoRelatorio'); canvas.width = canvas.clientWidth; canvas.height = 220; const ctx = canvas.getContext('2d'); if(window._relChart){ try{ window._relChart.destroy(); }catch(e){} window._relChart = null; } window._relChart = new Chart(ctx, { type: 'bar', data: { labels: sorted.map(x=>x.k), datasets: [{ label: 'Vendas (R$)', data: sorted.map(x=>x.v) }] }, options: { responsive:true, maintainAspectRatio:false, scales:{ y:{ beginAtZero:true } } } }); }catch(err){ console.warn('Chart render falhou:', err); } }
+
+        function exportRelatorioCSV(from, to){ const fromT = from? new Date(from+'T00:00:00'): new Date('1970-01-01'); const toT = to? new Date(to+'T23:59:59'): new Date(); const vendas = storage.carregarVendas(); const filtradas = vendas.filter(v=>{ const d=new Date(v.hora); return d>=fromT && d<=toT; }); if(!filtradas.length){ alert('Nenhuma transação no período'); return; } const header = ['hora','produtos','valor','pagamento','origem','tipoCaixa']; const rows = filtradas.map(v=> [v.hora, v.produtos, v.valor.toFixed(2), v.pagamento, v.origem||'', v.tipoCaixa||'']); const csv = createCSV([header, ...rows]); const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download='relatorio_vendas.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
+
+        // ---------- Fechamento ----------
+        function visualizarFechamento(){ const dt = document.getElementById('dataFechamento').value; if(!dt){ alert('Escolha a data'); return; } const vendas = storage.carregarVendas(); const start = new Date(dt+'T00:00:00'); const end = new Date(dt+'T23:59:59'); const filtradas = vendas.filter(v=>{ const d=new Date(v.hora); return d>=start && d<=end; }); let total=0; let retiradaFis=0; let retiradaDig=0; filtradas.forEach(v=> { total += v.valor; if(v.pagamento==='Retirada'){ if(v.origem==='fisico') retiradaFis += v.valor; else retiradaDig += v.valor; } }); const troco = getTrocoForDate(dt); const digitalInicial = getDigitalForDate(dt); document.getElementById('visuFechamento').innerHTML = '<div class="card">Data: '+formatDateInputToDMY(dt)+' · Total: R$ '+total.toFixed(2)+' · Transações: '+filtradas.length+' · Troco: R$ '+troco.toFixed(2)+' · Saldo digital inicial: R$ '+digitalInicial.toFixed(2)+' · Retiradas físicas: R$ '+retiradaFis.toFixed(2)+' · Retiradas digitais: R$ '+retiradaDig.toFixed(2)+'</div>'; }
+
+        function fecharDia(){ const dt = document.getElementById('dataFechamento').value; if(!dt){ alert('Escolha a data'); return; } const vendas = storage.carregarVendas(); const start = new Date(dt+'T00:00:00'); const end = new Date(dt+'T23:59:59'); const filtradas = vendas.filter(v=>{ const d=new Date(v.hora); return d>=start && d<=end; }); let total=0; let retiradaFis=0; let retiradaDig=0; filtradas.forEach(v=> { total += v.valor; if(v.pagamento==='Retirada'){ if(v.origem==='fisico') retiradaFis += v.valor; else retiradaDig += v.valor; } }); const troco = getTrocoForDate(dt); const digitalInicial = getDigitalForDate(dt); const fechamento = { id: uid(), data: dt, total: Number(total.toFixed(2)), trocoInicial: Number(troco.toFixed(2)), digitalInicial: Number(digitalInicial.toFixed(2)), vendasCount: filtradas.length, retiradasFisicas: Number(retiradaFis.toFixed(2)), retiradasDigitais: Number(retiradaDig.toFixed(2)), fechadoEm: new Date().toISOString() }; const fechamentos = storage.carregarFechamentos(); fechamentos.push(fechamento); storage.salvarFechamentos(fechamentos); alert('Fechamento registrado.'); carregarFechamentosTabela(); }
+
+        function imprimirFechamento(){ const dt = document.getElementById('dataFechamento').value; if(!dt){ alert('Escolha a data'); return; } const vendas = storage.carregarVendas(); const start = new Date(dt+'T00:00:00'); const end = new Date(dt+'T23:59:59'); const filtradas = vendas.filter(v=>{ const d=new Date(v.hora); return d>=start && d<=end; }); let total=0; let totalsByPayment = { 'Dinheiro':0, 'Pix':0, 'Crédito':0, 'Débito':0, 'Retirada':0 }; let retiradaFis=0; let retiradaDig=0; filtradas.forEach(function(v){ total+=v.valor; if(totalsByPayment[v.pagamento]===undefined) totalsByPayment[v.pagamento]=0; totalsByPayment[v.pagamento]+=v.valor; if(v.pagamento==='Retirada'){ if(v.origem==='fisico') retiradaFis += v.valor; else retiradaDig += v.valor; } }); const troco = getTrocoForDate(dt); const digitalInicial = getDigitalForDate(dt); const now = new Date(); const dinheiro = (totalsByPayment['Dinheiro']||0) + retiradaFis; const credito = totalsByPayment['Crédito']||0; const debito = totalsByPayment['Débito']||0; const pix = totalsByPayment['Pix']||0; const retirada = totalsByPayment['Retirada']||0; const brutoCaixa = dinheiro + troco; const dinheiroAposRetirarTroco = brutoCaixa - troco; const digitalSum = pix + credito + debito + retiradaDig; const digitalFinal = digitalInicial + digitalSum; const lucro25 = total * 0.25; let html = '<!doctype html><html><head><meta charset="utf-8"><title>Fechamento '+formatDateInputToDMY(dt)+'</title><style>body{font-family:Arial,Helvetica,sans-serif;padding:20px} table{width:100%;border-collapse:collapse;margin-top:10px} th,td{border:1px solid #333;padding:8px;text-align:left} .right{text-align:right}</style></head><body><div class="print-area"><div class="print-head"><h2>Rumspringa Conveniência e Tabacaria</h2><div>Fechamento: '+formatDateInputToDMY(dt)+'</div><div>Emitido: '+formatDateTimeToDMY(now.toISOString())+'</div></div>';
+          html += '<div style="margin-top:8px"><strong>Totais por forma de pagamento</strong></div>';
+          html += '<div>Dinheiro: R$ '+dinheiro.toFixed(2)+'</div>';
+          html += '<div>Pix: R$ '+pix.toFixed(2)+'</div>';
+          html += '<div>Crédito: R$ '+credito.toFixed(2)+'</div>';
+          html += '<div>Débito: R$ '+debito.toFixed(2)+'</div>';
+          html += '<div style="margin-top:6px">Troco inicial: R$ '+troco.toFixed(2)+'</div>';
+          html += '<div style="margin-top:6px"><strong>Bruto no caixa (Dinheiro + Troco): R$ '+brutoCaixa.toFixed(2)+'</strong></div>';
+          html += '<div style="margin-top:6px"><strong>Dinheiro no caixa após retirar troco: R$ '+brutoCaixa.toFixed(2)+' - R$ '+troco.toFixed(2)+' = R$ '+dinheiroAposRetirarTroco.toFixed(2)+'</strong></div>';
+          html += '<div style="margin-top:6px"><strong>Somativa digital (Pix + Cartões + retiradas digitais): R$ '+digitalSum.toFixed(2)+'</strong></div>';
+          html += '<div style="margin-top:6px"><strong>Saldo digital inicial: R$ '+digitalInicial.toFixed(2)+'</strong></div>';
+          html += '<div style="margin-top:6px"><strong>Saldo digital ao fim (inicial + somativa): R$ '+digitalFinal.toFixed(2)+'</strong></div>';
+          html += '<div style="margin-top:6px"><strong>Retiradas físicas: R$ '+retiradaFis.toFixed(2)+'</strong></div>';
+          html += '<div style="margin-top:6px"><strong>Retiradas digitais: R$ '+retiradaDig.toFixed(2)+'</strong></div>';
+          html += '<div style="margin-top:6px"><strong>Total vendas: R$ '+total.toFixed(2)+'</strong></div>';
+          html += '<div style="margin-top:6px"><strong>Lucro estimado (25%): R$ '+lucro25.toFixed(2)+'</strong></div>';
+          html += '<table><thead><tr><th>Hora</th><th>Produtos</th><th class="right">Valor</th><th>Pagamento</th><th>Origem</th></tr></thead><tbody>';
+          filtradas.forEach(function(v){ html += '<tr><td>'+formatTimeFromISO(v.hora)+'</td><td>'+escapeHtml(v.produtos)+'</td><td class="right">R$ '+v.valor.toFixed(2)+'</td><td>'+escapeHtml(v.pagamento)+'</td><td>'+escapeHtml(v.origem||'')+'</td></tr>'; });
+          html += '</tbody></table><div style="margin-top:14px">Gerado pelo Sistema de Caixa - Rumspringa</div></div></body></html>';
+          const w = window.open('','_blank'); if(!w){ alert('Bloqueador de popups impediu a abertura da janela. Permita popups para imprimir.'); return; } w.document.write(html); w.document.close(); w.focus();
+        }
+
+        function carregarFechamentosTabela(){ const tab = document.querySelector('#tabelaFechamentos tbody'); if(!tab) return; tab.innerHTML=''; let f = storage.carregarFechamentos() || []; let changed = false; f = f.map(row => { if(!row.id){ row.id = uid(); changed = true; } return row; }); if(changed) storage.salvarFechamentos(f); const list = f.slice().reverse(); list.forEach(function(row){ const tr = document.createElement('tr'); tr.innerHTML = '<td>'+formatDateInputToDMY(row.data)+'</td><td>R$ '+row.total.toFixed(2)+'</td><td>R$ '+row.trocoInicial.toFixed(2)+'</td><td>R$ '+(row.digitalInicial?row.digitalInicial.toFixed(2):'0.00')+'</td><td>'+row.vendasCount+'</td><td></td>'; const td = tr.querySelector('td:last-child'); const btnDel = document.createElement('button'); btnDel.className='btn-sm btn-danger'; btnDel.textContent='Apagar'; btnDel.addEventListener('click', ()=> apagarFechamento(row.id)); td.appendChild(btnDel); tab.appendChild(tr); }); }
+
+        function apagarFechamento(id){ if(!confirm('Apagar este fechamento?')) return; let f = storage.carregarFechamentos() || []; f = f.filter(x=>x.id!==id); storage.salvarFechamentos(f); carregarFechamentosTabela(); alert('Fechamento apagado'); }
+
+        function downloadBackup(){ const data = { vendas: storage.carregarVendas(), fechamentos: storage.carregarFechamentos(), trocoMap: getAllTrocos(), digitalMap: getAllDigitais() }; const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'backup_caixa.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
+
+        function getAllTrocos(){ const out = {}; for(let i=0;i<localStorage.length;i++){ const k = localStorage.key(i); if(k && k.indexOf('trocoInicial_')===0){ out[k] = localStorage.getItem(k); } } return out; }
+        function getAllDigitais(){ const out = {}; for(let i=0;i<localStorage.length;i++){ const k = localStorage.key(i); if(k && k.indexOf('digitalInicial_')===0){ out[k] = localStorage.getItem(k); } } return out; }
+
+        function importBackup(evt){ const file = evt.target.files[0]; if(!file) return; const reader = new FileReader(); reader.onload = function(e){ try{ const obj = JSON.parse(e.target.result); if(confirm('Arquivo carregado. Clique OK para SUBSTITUIR TODOS os dados locais (transações, fechamentos e trocos/digitais), ou Cancel para MESCLAR sem duplicatas (manter dados locais e adicionar apenas items novos do arquivo).')){ storage.salvarVendas(obj.vendas||[]); storage.salvarFechamentos(obj.fechamentos||[]); if(obj.trocoMap){ Object.keys(obj.trocoMap).forEach(k=> localStorage.setItem(k, obj.trocoMap[k])); } if(obj.digitalMap){ Object.keys(obj.digitalMap).forEach(k=> localStorage.setItem(k, obj.digitalMap[k])); } alert('Dados substituídos com sucesso'); } else { const vendasExist = storage.carregarVendas(); const mapV = new Map(); vendasExist.forEach(v=>{ if(v && v.id) mapV.set(v.id, v); else mapV.set(uid(), v); }); (obj.vendas||[]).forEach(v=>{ if(!v.id){ v.id = uid(); } if(!mapV.has(v.id)) mapV.set(v.id, v); }); const mergedVendas = Array.from(mapV.values()); storage.salvarVendas(mergedVendas); const fechExist = storage.carregarFechamentos(); const mapF = new Map(); fechExist.forEach(f=>{ if(f && f.id) mapF.set(f.id, f); else mapF.set(uid(), f); }); (obj.fechamentos||[]).forEach(f=>{ if(!f.id) f.id = uid(); if(!mapF.has(f.id)) mapF.set(f.id, f); }); const mergedFech = Array.from(mapF.values()); storage.salvarFechamentos(mergedFech); if(obj.trocoMap){ Object.keys(obj.trocoMap).forEach(k=> { if(!localStorage.getItem(k)) localStorage.setItem(k, obj.trocoMap[k]); }); } if(obj.digitalMap){ Object.keys(obj.digitalMap).forEach(k=> { if(!localStorage.getItem(k)) localStorage.setItem(k, obj.digitalMap[k]); }); } alert('Dados mesclados sem duplicatas. Trocos/digitais existentes foram mantidos.'); } atualizarTudo(); } catch(err){ alert('Arquivo inválido: ' + err); } finally { evt.target.value = ''; } }; reader.readAsText(file); }
+
+        function atualizarTudo(){ atualizarDashboard(); atualizarTabela(); carregarFechamentosTabela(); }
+
+        const today = new Date(); const dsToday = today.getFullYear()+'-'+pad(today.getMonth()+1)+'-'+pad(today.getDate()); const trocoValInit = getTrocoForDate(dsToday); const trocoElInit = document.getElementById('trocoAtivo'); if(trocoElInit) trocoElInit.innerText = trocoValInit.toFixed(2); const trocoElInit2 = document.getElementById('trocoAtivo2'); if(trocoElInit2) trocoElInit2.innerText = trocoValInit.toFixed(2);
+        const digitalValInit = getDigitalForDate(dsToday); const digitalElInit = document.getElementById('digitalAtivo'); if(digitalElInit) digitalElInit.innerText = digitalValInit.toFixed(2); const digitalElInit2 = document.getElementById('digitalAtivo2'); if(digitalElInit2) digitalElInit2.innerText = digitalValInit.toFixed(2);
+
+        atualizarTudo();
+
+        (function loadSheetJS(){ const script = document.createElement('script'); script.src = 'https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js'; script.onload = function(){ console.log('SheetJS carregado'); }; script.onerror = function(){ console.warn('Não foi possível carregar SheetJS; fallback para CSV/.xlsx ativado'); }; document.head.appendChild(script); })();
+
+      }catch(err){ showError(err && (err.stack||err.message||String(err))); }
+    });
+
+  })();
+  </script>
+</body>
+</html>
